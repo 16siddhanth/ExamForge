@@ -1,0 +1,37 @@
+import cors from 'cors';
+import * as dotenv from 'dotenv';
+import express from 'express';
+
+import authRoutes from './routes/auth.js';
+import paperRoutes from './routes/papers.js';
+import questionRoutes from './routes/questions.js';
+import quizRoutes from './routes/quizzes.js';
+import samplePapersRoutes from './routes/samplePapers.js';
+import statsRoutes from './routes/stats.js';
+import subjectRoutes from './routes/subjects.js';
+import userRoutes from './routes/users.js';
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/papers', paperRoutes);
+app.use('/api/questions', questionRoutes);
+app.use('/api/quizzes', quizRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/subjects', subjectRoutes);
+app.use('/api/sample-papers', samplePapersRoutes);
+app.use('/api/stats', statsRoutes);
+
+app.get('/', (req, res) => {
+  res.send('ExamForge backend is running!');
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
