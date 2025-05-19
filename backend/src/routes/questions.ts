@@ -1,6 +1,6 @@
 import { Question } from '@prisma/client';
 import express from 'express';
-import prisma from '../models/prisma';
+import prisma from '../models/prisma.js';
 
 const router = express.Router();
 

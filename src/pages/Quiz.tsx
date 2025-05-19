@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import { ArrowLeft, ArrowRight, Award, BookOpen, CheckCircle, Clock, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 interface Subject {
   id: string;
@@ -52,7 +52,7 @@ interface QuizAttempt {
 // API functions
 async function fetchSubjects() {
   try {
-    const response = await axios.get<Subject[]>("http://localhost:4000/api/subjects");
+    const response = await axios.get<Subject[]>("/api/subjects");
     return response.data;
   } catch (error) {
     console.error("Error fetching subjects:", error);
@@ -62,7 +62,7 @@ async function fetchSubjects() {
 
 async function fetchQuizHistory(userId: string) {
   try {
-    const response = await axios.get<QuizAttempt[]>(`http://localhost:4000/api/quizzes/${userId}`);
+    const response = await axios.get<QuizAttempt[]>(`/api/quizzes/${userId}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching quiz history:", error);
@@ -72,7 +72,7 @@ async function fetchQuizHistory(userId: string) {
 
 async function generateQuiz(subjectId: string, topic?: string) {
   try {
-    const response = await axios.post<{ questions: QuizQuestion[] }>("http://localhost:4000/api/quizzes/generate", {
+    const response = await axios.post<{ questions: QuizQuestion[] }>("/api/quizzes/generate", {
       subjectId,
       topic
     });
@@ -92,7 +92,7 @@ async function saveQuizAttempt(data: {
   timeSpent: number;
 }) {
   try {
-    const response = await axios.post<QuizAttempt>("http://localhost:4000/api/quizzes", data);
+    const response = await axios.post<QuizAttempt>("/api/quizzes", data);
     return response.data;
   } catch (error) {
     console.error("Error saving quiz attempt:", error);
@@ -103,20 +103,20 @@ async function saveQuizAttempt(data: {
 export default function Quiz() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { subjectId } = useParams<{ subjectId?: string }>();
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>(subjectId || "");
   const [selectedTopic, setSelectedTopic] = useState<string>("");
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>("start");
-  const [quizStarted, setQuizStarted] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>(subjectId ? "quiz" : "start");
+  const [quizStarted, setQuizStarted] = useState<boolean>(!!subjectId);
   const [quizCompleted, setQuizCompleted] = useState<boolean>(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [timeSpent, setTimeSpent] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
-
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -130,9 +130,17 @@ export default function Quiz() {
         const [subjectsData, quizHistoryData] = await Promise.all([
           fetchSubjects(),
           fetchQuizHistory(userId)
-        ]);
-        setSubjects(subjectsData);
+        ]);        setSubjects(subjectsData);
         setQuizHistory(quizHistoryData);
+        
+        // If a subject ID is provided via URL parameter, start quiz automatically
+        if (subjectId) {
+          setSelectedSubject(subjectId);
+          // Use the existing startQuiz function to start a quiz with the subject ID
+          setTimeout(() => {
+            startQuiz();
+          }, 300); // Small delay to ensure the state is updated
+        }
       } catch (error) {
         console.error("Error loading data:", error);
         toast({

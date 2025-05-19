@@ -1,69 +1,93 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const prisma_1 = __importDefault(require("../models/prisma"));
-const router = express_1.default.Router();
-// GET /api/sample-papers?subjectId=... - List all sample papers for a subject
-router.get('/', async (req, res) => {
-    const { subjectId } = req.query;
-    const where = subjectId ? { subjectId: String(subjectId) } : {};
-    const samplePapers = await prisma_1.default.samplePaper.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        include: { subject: true, user: true },
-    });
-    res.json(samplePapers);
-});
-// POST /api/sample-papers - Create a new sample paper
+import { Router } from 'express';
+import prisma from '../models/prisma.js';
+const router = Router();
+// POST /api/sample-papers - Create a sample paper
 router.post('/', async (req, res) => {
     try {
         const { userId, subjectId, title, description, totalMarks, estimatedTime, questions } = req.body;
-        const samplePaper = await prisma_1.default.samplePaper.create({
+        const samplePaper = await prisma.paper.create({
             data: {
                 userId,
                 subjectId,
                 title,
-                description,
-                totalMarks,
-                estimatedTime,
-                questions: JSON.stringify(questions),
+                filePath: 'ai-generated', // Flag to identify AI-generated papers
+                pageCount: 0, // Not applicable for AI-generated papers
+                questions: {
+                    create: questions.map((q) => ({
+                        text: q.text,
+                        type: q.type,
+                        options: q.options ? JSON.stringify(q.options) : null,
+                        answer: q.answer,
+                        explanation: q.explanation,
+                        marks: q.marks || null,
+                        difficulty: q.difficulty || 'medium',
+                        topic: q.topic || null
+                    }))
+                }
             },
+            include: {
+                questions: true,
+                subject: true
+            }
         });
-        res.json(samplePaper);
+        // Respond with mapped fields
+        res.json({
+            id: samplePaper.id,
+            title: samplePaper.title,
+            subject: samplePaper.subject.name,
+            createdAt: samplePaper.uploadDate,
+            questions: samplePaper.questions
+        });
     }
-    catch (err) {
-        const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
-        res.status(400).json({ error: message });
+    catch (error) {
+        console.error('Error creating sample paper:', error);
+        res.status(500).json({ error: 'Error creating sample paper' });
     }
 });
-// GET /api/sample-papers/:id - Get a single sample paper
-router.get('/:id', async (req, res) => {
+// GET /api/sample-papers - Get all sample papers for a subject
+router.get('/', async (req, res) => {
     try {
-        const samplePaper = await prisma_1.default.samplePaper.findUnique({
-            where: { id: req.params.id },
-            include: { subject: true, user: true },
+        const { subjectId } = req.query;
+        const papers = await prisma.paper.findMany({
+            where: {
+                subjectId: String(subjectId),
+                filePath: 'ai-generated' // Only get AI-generated papers
+            },
+            include: {
+                questions: true,
+                subject: true
+            },
+            orderBy: { uploadDate: 'desc' }
         });
-        if (!samplePaper)
-            return res.status(404).json({ error: 'Not found' });
-        res.json(samplePaper);
+        // Map fields for frontend
+        res.json(papers.map(p => ({
+            id: p.id,
+            title: p.title,
+            subject: p.subject.name,
+            createdAt: p.uploadDate,
+            questions: p.questions
+        })));
     }
-    catch (err) {
-        const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
-        res.status(400).json({ error: message });
+    catch (error) {
+        console.error('Error getting sample papers:', error);
+        res.status(500).json({ error: 'Error getting sample papers' });
     }
 });
 // DELETE /api/sample-papers/:id - Delete a sample paper
 router.delete('/:id', async (req, res) => {
     try {
-        await prisma_1.default.samplePaper.delete({ where: { id: req.params.id } });
+        await prisma.paper.delete({
+            where: {
+                id: req.params.id,
+                filePath: 'ai-generated' // Extra check to ensure we only delete AI-generated papers
+            }
+        });
         res.json({ success: true });
     }
-    catch (err) {
-        const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
-        res.status(400).json({ error: message });
+    catch (error) {
+        console.error('Error deleting sample paper:', error);
+        res.status(500).json({ error: 'Error deleting sample paper' });
     }
 });
-exports.default = router;
+export default router;
+//# sourceMappingURL=samplePapers.js.map

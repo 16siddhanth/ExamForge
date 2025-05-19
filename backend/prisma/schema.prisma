@@ -34,9 +34,12 @@ model Paper {
   subject     Subject  @relation(fields: [subjectId], references: [id])
   subjectId   String
   title       String
+  description String?  // Optional description for AI-generated sample papers
   filePath    String
   uploadDate  DateTime @default(now())
   pageCount   Int
+  totalMarks  Int?     // Total marks for sample papers
+  estimatedTime Int?   // Estimated time (minutes) for sample papers
   questions   Question[]
 }
 

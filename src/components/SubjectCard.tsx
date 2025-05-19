@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 export interface Subject {
   id: string;
   name: string;
-  mainTopics: string;
+  mainTopics: string | string[];
 }
 
 interface SubjectCardProps {
@@ -20,7 +20,12 @@ interface SubjectCardProps {
 
 export default function SubjectCard({ subject }: SubjectCardProps) {
   const navigate = useNavigate();
-  const mainTopics = JSON.parse(subject.mainTopics);
+  // Handle both cases: if mainTopics is already an array or if it's a string that needs parsing
+  const mainTopics = Array.isArray(subject.mainTopics) 
+    ? subject.mainTopics 
+    : (typeof subject.mainTopics === 'string' && subject.mainTopics 
+        ? JSON.parse(subject.mainTopics)
+        : []);
 
   return (
     <Card className="hover:shadow-lg transition-shadow">

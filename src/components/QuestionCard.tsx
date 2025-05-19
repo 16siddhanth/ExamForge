@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Option {
   id: string;
@@ -13,7 +13,7 @@ interface QuizQuestion {
   id: string;
   text: string;
   type: "multiple-choice" | "short-answer" | "long-answer";
-  options?: Option[];
+  options?: Option[] | string;
   answer?: string;
   explanation?: string;
   marks?: number;
@@ -31,6 +31,25 @@ interface QuestionCardProps {
 const QuestionCard = ({ question, onAnswer }: QuestionCardProps) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(question.userAnswer || null);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(!!question.userAnswer);
+  const [parsedOptions, setParsedOptions] = useState<Option[]>([]);
+
+  // Parse options if they're stored as a string
+  useEffect(() => {
+    if (question.options) {
+      if (typeof question.options === 'string') {
+        try {
+          setParsedOptions(JSON.parse(question.options));
+        } catch (e) {
+          console.error('Error parsing options:', e);
+          setParsedOptions([]);
+        }
+      } else if (Array.isArray(question.options)) {
+        setParsedOptions(question.options);
+      }
+    } else {
+      setParsedOptions([]);
+    }
+  }, [question.options]);
 
   const handleOptionSelect = (optionId: string) => {
     if (isSubmitted) return;
@@ -49,9 +68,9 @@ const QuestionCard = ({ question, onAnswer }: QuestionCardProps) => {
         <CardTitle>{question.text}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {question.type === "multiple-choice" && question.options && (
+        {question.type === "multiple-choice" && parsedOptions.length > 0 && (
           <div className="space-y-2">
-            {question.options.map((option) => (
+            {parsedOptions.map((option) => (
               <Button
                 key={option.id}
                 variant={selectedOption === option.id ? "default" : "outline"}

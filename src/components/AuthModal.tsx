@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import axios from 'axios';
 import { useState } from "react";
 
 interface AuthModalProps {
@@ -27,29 +28,34 @@ const AuthModal = ({ isOpen, onClose, type, onSwitchType, onAuthSuccess }: AuthM
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    // Simulate authentication
-    setTimeout(() => {
-      setIsLoading(false);
-      if (type === "login") {
-        toast({
-          title: "Login successful",
-          description: "Welcome back to ExamForge!",
-        });
-      } else {
-        toast({
-          title: "Account created",
-          description: "Your account has been created successfully",
-        });
-      }
-      // Mock successful login/signup
-      localStorage.setItem("isLoggedIn", "true");
+    try {
+      const endpoint = type === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const payload: any = { email, password };
+      if (type === 'signup') payload.name = name;
+      const response = await axios.post(endpoint, payload);
+      const { user, token } = response.data;
+      // Store auth info
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userId', user.id);
+      localStorage.setItem('token', token);
+      toast({
+        title: type === 'login' ? 'Login successful' : 'Account created',
+        description: type === 'login' ? 'Welcome back to ExamForge!' : 'Your account has been created successfully',
+      });
       onClose();
       onAuthSuccess();
-    }, 1500);
+    } catch (err: any) {
+      toast({
+        title: 'Authentication failed',
+        description: err.response?.data?.error || err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

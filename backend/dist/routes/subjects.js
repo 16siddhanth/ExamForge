@@ -1,22 +1,35 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const prisma_1 = __importDefault(require("../models/prisma"));
-const router = express_1.default.Router();
+import { Router } from 'express';
+import prisma from '../models/prisma.js';
+const router = Router();
 router.get('/', async (req, res) => {
-    const subjects = await prisma_1.default.subject.findMany();
-    res.json(subjects);
+    try {
+        const subjects = await prisma.subject.findMany();
+        // Parse mainTopics back to array when sending response
+        const subjectsWithParsedTopics = subjects.map((subject) => ({
+            ...subject,
+            mainTopics: JSON.parse(subject.mainTopics)
+        }));
+        res.json(subjectsWithParsedTopics);
+    }
+    catch (err) {
+        const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
+        res.status(400).json({ error: message });
+    }
 });
 router.post('/', async (req, res) => {
     const { name, mainTopics } = req.body;
     try {
-        const subject = await prisma_1.default.subject.create({
-            data: { name, mainTopics },
+        const subject = await prisma.subject.create({
+            data: {
+                name,
+                mainTopics: JSON.stringify(mainTopics) // Store as JSON string
+            },
         });
-        res.json(subject);
+        // Parse mainTopics back to array in response
+        res.json({
+            ...subject,
+            mainTopics: JSON.parse(subject.mainTopics)
+        });
     }
     catch (err) {
         const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
@@ -25,11 +38,38 @@ router.post('/', async (req, res) => {
 });
 router.get('/:id', async (req, res) => {
     try {
-        const subject = await prisma_1.default.subject.findUnique({ where: { id: req.params.id } });
+        const subject = await prisma.subject.findUnique({
+            where: { id: String(req.params.id) }
+        });
         if (!subject) {
             return res.status(404).json({ error: 'Subject not found' });
         }
-        res.json(subject);
+        // Parse mainTopics back to array in response
+        res.json({
+            ...subject,
+            mainTopics: JSON.parse(subject.mainTopics)
+        });
+    }
+    catch (err) {
+        const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
+        res.status(400).json({ error: message });
+    }
+});
+router.put('/:id', async (req, res) => {
+    const { name, mainTopics } = req.body;
+    try {
+        const subject = await prisma.subject.update({
+            where: { id: String(req.params.id) },
+            data: {
+                name,
+                mainTopics: JSON.stringify(mainTopics) // Store as JSON string
+            },
+        });
+        // Parse mainTopics back to array in response
+        res.json({
+            ...subject,
+            mainTopics: JSON.parse(subject.mainTopics)
+        });
     }
     catch (err) {
         const message = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err);
@@ -38,7 +78,7 @@ router.get('/:id', async (req, res) => {
 });
 router.delete('/:id', async (req, res) => {
     try {
-        await prisma_1.default.subject.delete({ where: { id: req.params.id } });
+        await prisma.subject.delete({ where: { id: String(req.params.id) } });
         res.json({ success: true });
     }
     catch (err) {
@@ -46,4 +86,5 @@ router.delete('/:id', async (req, res) => {
         res.status(400).json({ error: message });
     }
 });
-exports.default = router;
+export default router;
+//# sourceMappingURL=subjects.js.map

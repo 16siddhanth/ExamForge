@@ -1,28 +1,28 @@
-
-import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { Upload, X, Loader2 } from "lucide-react";
-import { processDocumentWithOCR } from "@/utils/ocr";
+import axios from "axios";
+import { Loader2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface FileUploaderProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: (documentData: any) => void;
   subjects: string[];
+  subjectId: string;
 }
 
-const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUploaderProps) => {
+const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects, subjectId }: FileUploaderProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -32,6 +32,17 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
   const [isAddingNewSubject, setIsAddingNewSubject] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  
+  // Log props for debugging
+  useEffect(() => {
+    if (isOpen) {
+      console.log("FileUploader opened with props:", { 
+        subjects, 
+        subjectId,
+        userId: localStorage.getItem('userId')
+      });
+    }
+  }, [isOpen, subjects, subjectId]);
 
   const resetForm = () => {
     setFile(null);
@@ -49,15 +60,20 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
     
     if (!selectedFile) {
       return;
-    }
-    
-    // Check file type
-    const fileType = selectedFile.type;
-    if (fileType !== "application/pdf" && 
-        fileType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      setFileError("Please upload a PDF or DOCX file");
-      return;
-    }
+    }      // Check file type
+      const fileType = selectedFile.type;
+      if (fileType !== "application/pdf" && 
+          fileType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        setFileError("Please upload a PDF or DOCX file");
+        console.log("File rejected. Type:", fileType);
+        return;
+      }
+      
+      // Check if PDF file is valid (not corrupted)
+      if (fileType === "application/pdf") {
+        // Just log that we detected a PDF file
+        console.log("PDF file selected:", selectedFile.name);
+      }
     
     // Check file size (limit to 10MB)
     if (selectedFile.size > 10 * 1024 * 1024) {
@@ -77,7 +93,6 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
-
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files?.[0];
@@ -88,6 +103,7 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
       if (fileType !== "application/pdf" && 
           fileType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
         setFileError("Please upload a PDF or DOCX file");
+        console.log("File rejected by drop. Type:", fileType);
         return;
       }
       
@@ -106,7 +122,6 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
       }
     }
   };
-
   const handleUpload = async () => {
     if (!file) {
       setFileError("Please select a file to upload");
@@ -122,9 +137,26 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
       return;
     }
     
-    let subject = selectedSubject;
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+      toast({
+        title: "Authentication error",
+        description: "You must be logged in to upload documents. Please log in and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!subjectId) {
+      toast({
+        title: "Subject error",
+        description: "No subject ID was provided. Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }    let subject = selectedSubject;
     if (isAddingNewSubject && newSubject.trim()) {
-      subject = newSubject.trim();
+      subject = newSubject.trim();    
     } else if (isAddingNewSubject && !newSubject.trim()) {
       toast({
         title: "Subject name required",
@@ -134,43 +166,201 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
       return;
     }
     
-    setIsUploading(true);
-    
-    try {
-      // Process document with OCR
-      const documentData = await processDocumentWithOCR(file);
-      
-      // Add metadata
-      const documentWithMetadata = {
-        ...documentData,
-        title: documentTitle,
-        subject: subject,
-        uploadDate: new Date().toISOString(),
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-      };
-      
-      // Simulate processing delay
-      setTimeout(() => {
-        onUploadSuccess(documentWithMetadata);
-        
-        toast({
-          title: "Upload successful",
-          description: "Your document has been processed successfully",
-        });
-        
-        resetForm();
-        onClose();
-      }, 2000);
-    } catch (error) {
-      console.error("Error processing document:", error);
+    // Double-check all required values before proceeding
+    if (!documentTitle.trim() || !userId || !subjectId || !file) {
+      console.error("Missing required values:", {
+        documentTitle: !documentTitle.trim(),
+        userId: !userId,
+        subjectId: !subjectId,
+        file: !file
+      });
       toast({
-        title: "Upload failed",
-        description: "There was an error processing your document",
+        title: "Form validation error",
+        description: "Some required fields are missing. Please try again.",
         variant: "destructive",
       });
-      setIsUploading(false);
+      return;
+    }
+      setIsUploading(true);
+    try {
+      // Upload file and metadata to backend
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', documentTitle);
+      formData.append('userId', userId);
+      
+      // Ensure subjectId is treated as a string and properly added to the form
+      if (typeof subjectId === 'string') {
+        formData.append('subjectId', subjectId.trim());
+      } else if (subjectId) {
+        formData.append('subjectId', String(subjectId));
+      }
+      
+      // Verify form data contents before sending
+      console.log('Form data verification:', {
+        hasFile: !!formData.get('file'),
+        hasTitle: !!formData.get('title'),
+        hasUserId: !!formData.get('userId'),
+        hasSubjectId: !!formData.get('subjectId')
+      });
+        // Log form data for debugging
+      console.log('Form data being sent:', {
+        title: documentTitle,
+        userId,
+        subjectId: typeof subjectId === 'string' ? subjectId : String(subjectId),
+        fileSize: file.size,
+        fileName: file.name
+      });
+        // For PDF specific issues, verify file type
+      if (file.type === 'application/pdf') {
+        console.log('PDF file detected. File details:', {
+          type: file.type,
+          size: file.size,
+          lastModified: new Date(file.lastModified).toISOString()
+        });
+        
+        // For PDF files, remind about file compatibility
+        console.log('Checking PDF compatibility...');
+        
+        if (file.size < 100) {
+          console.warn('PDF file is suspiciously small, might be corrupted');
+        }
+      }
+      
+      // Add loading toast with id to reference it later
+      const toastId = toast({ 
+        title: 'Processing document', 
+        description: 'This may take a moment while we analyze your document...',
+        duration: 60000, // Long duration since we'll dismiss manually on success
+      });
+      
+      // Set a timeout to help prevent channel closing errors
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Request timed out after 120 seconds'));
+        }, 120000); // 120 second timeout - longer to accommodate server processing
+      });
+      
+      // Configure Axios with a longer timeout
+      const axiosConfig = {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000, // 120 second Axios timeout
+        // Progress event for large files
+        onUploadProgress: (progressEvent: any) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`Upload progress: ${percentCompleted}%`);
+        }
+      };
+      
+      // Race the actual request with the timeout
+      const response = await Promise.race([
+        axios.post('/api/papers/upload', formData, axiosConfig),
+        timeoutPromise
+      ]) as any; // Cast to any to handle both response and error
+      
+      const documentData = response.data;
+
+      onUploadSuccess(documentData);
+      toast({ 
+        title: 'Upload successful', 
+        description: 'Your document has been processed successfully' 
+      });
+      resetForm();
+      onClose();    } catch (error: any) {
+      console.error("Error processing document:", error);
+      
+      // Extract the most useful error message
+      let errorMessage = "There was an error processing your document";
+      
+      if (error.message === 'Request timed out after 120 seconds') {
+        errorMessage = "The request timed out. The server is taking too long to process your document. Try a smaller file or fewer pages.";      } else if (error.message === 'Network Error') {
+        errorMessage = "Network connection error. The connection may have been interrupted during upload.";
+      } else if (error.message?.includes('message channel closed')) {
+        errorMessage = "The connection to the server was closed unexpectedly. This can happen with large files or slow connections.";
+      } else if (error.message?.includes('canvas') || error.message?.includes('DOM') || error.message?.includes('render')) {
+        errorMessage = "PDF rendering error: The document contains elements that cannot be processed.";
+        
+        // Show an additional toast with more detailed information
+        toast({
+          title: "PDF compatibility issue",
+          description: "This PDF contains elements that are difficult to process. Try saving it as a simplified PDF.",
+          variant: "destructive"
+        });
+      } else if (error.message?.includes('canvas') || error.message?.includes('DOM') || error.message?.includes('render')) {
+        errorMessage = "PDF rendering error: The document contains elements that cannot be processed. Try converting it to a different format or flatten complex elements.";
+        toast({
+          title: "PDF compatibility issue",
+          description: "This PDF contains elements that are difficult to process. For best results, try saving it as a simplified PDF without layers or 3D content.",
+          variant: "destructive"
+        });
+      } else if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        const responseError = error.response.data?.error || error.response.data?.message;
+        if (responseError) {
+          errorMessage = responseError;
+          console.log('Server error details:', error.response.data);        } else if (error.response.status === 400) {
+          // For 400 errors, try to extract more specific error details
+          if (error.response.data) {
+            console.log('Bad request details:', error.response.data);
+            const missingFields = [];
+            if (!documentTitle) missingFields.push('Document title');
+            if (!localStorage.getItem('userId')) missingFields.push('User ID');
+            if (!subjectId) missingFields.push('Subject ID');
+            
+            if (missingFields.length > 0) {
+              errorMessage = `Missing required fields: ${missingFields.join(', ')}`;            } else if (file.type === 'application/pdf') {
+              errorMessage = "Issue with PDF file: The file may be corrupted, password-protected, or in an unsupported format. Try a different PDF file.";
+              
+              // Provide more detailed instructions for common PDF issues
+              toast({
+                title: "PDF troubleshooting tips",
+                description: "Try saving the PDF again with 'Save As' in a PDF reader, removing any password protection, or converting it to a different format first.",
+                duration: 8000
+              });
+            } else {
+              errorMessage = "Bad request: Please check your file and try again";
+            }
+          } else {
+            errorMessage = "Bad request: Please check your file format and try again";
+          }
+        } else if (error.response.status === 413) {
+          errorMessage = "The file is too large. Please upload a smaller file";
+        } else if (error.response.status === 500) {
+          errorMessage = "Server error during processing. The server might be overloaded or the file too complex.";
+        } else if (error.response.status === 504) {
+          errorMessage = "The server timed out while processing your request. Try again with a smaller document.";
+        }
+      } else if (error.message?.includes('canvas') || error.message?.includes('DOM') || error.message?.includes('render')) {
+        // Handle specific DOM/Canvas-related errors for PDF processing
+        errorMessage = "There was an issue processing your PDF. This might be due to unsupported elements or complex content in the file.";
+        toast({
+          title: "PDF rendering issue",
+          description: "Try simplifying your PDF or converting it to a different format before uploading.",
+          variant: "destructive"
+        });
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = "No response from server. The connection may have been lost during upload.";
+      } else {
+        // Something happened in setting up the request
+        errorMessage = error.message || errorMessage;
+      }
+      
+      toast({
+        title: "Upload failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      
+      // Allow quick restart if PDF-specific errors
+      if (file.type === 'application/pdf' && (error.response?.status === 400 || errorMessage.includes('PDF'))) {
+        setFileError("Please try a different PDF file or convert to DOCX format");
+        // Don't reset the form completely, just mark it as not uploading
+        setIsUploading(false);
+      } else {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -203,12 +393,11 @@ const FileUploader = ({ isOpen, onClose, onUploadSuccess, subjects }: FileUpload
               </p>
               <p className="mt-1 text-xs text-gray-500">
                 Supports: PDF, DOCX (Max 10MB)
-              </p>
-              <Input
+              </p>              <Input
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept=".pdf,.docx"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={handleFileChange}
               />
               {fileError && <p className="mt-2 text-sm text-red-500">{fileError}</p>}

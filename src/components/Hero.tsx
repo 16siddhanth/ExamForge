@@ -15,11 +15,10 @@ const Hero = () => {
   const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
 
   useEffect(() => {
-    // Fetch popular subjects/topics from backend if user is logged in
-    const fetchSuggestedTopics = async () => {
+    // Fetch popular subjects/topics from backend if user is logged in    const fetchSuggestedTopics = async () => {
       if (isLoggedIn) {
         try {
-          const response = await axios.get("http://localhost:4000/api/subjects/popular");
+          const response = await axios.get("/api/subjects/popular");
           const topics = response.data.topics.slice(0, 3); // Get top 3 topics
           setSuggestedTopics(topics);
         } catch (error) {

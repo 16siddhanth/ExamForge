@@ -1,9 +1,9 @@
-
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import AuthModal from "@/components/AuthModal";
+import { Button } from "@/components/ui/button";
+import axios from "axios";
 import { Menu, X } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 interface NavbarProps {
   isLoggedIn: boolean;
@@ -15,6 +15,10 @@ const Navbar = ({ isLoggedIn, onLogout, onAuthSuccess = () => {} }: NavbarProps)
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalType, setAuthModalType] = useState<"login" | "signup">("login");
+  const navigate = useNavigate();
+
+  // Set auth header
+  axios.defaults.headers.common['Authorization'] = `Bearer ${localStorage.getItem('token')}`;
 
   const handleMenuToggle = () => {
     setIsMenuOpen(!isMenuOpen);

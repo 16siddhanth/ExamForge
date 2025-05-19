@@ -55,8 +55,7 @@ const Subject = () => {
         if (!isLoggedIn) {
           navigate("/");
           return;
-        }
-        // Fetch subject
+        }        // Fetch subject
         const subjectRes = await axios.get(`/api/subjects/${subjectId}`);
         setSubject(subjectRes.data);
         // Fetch documents for this subject
@@ -106,47 +105,124 @@ const Subject = () => {
 
   // Generate sample paper using backend (AI) and persist to backend
   const handleGenerateSamplePaper = async () => {
-    if (documents.length === 0) {
-      toast({
-        title: "No documents available",
-        description: "Please upload at least one document before generating a sample paper",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsGenerating(true);
     try {
-      const allQuestions: Question[] = documents.flatMap(doc => doc.questions);
+      setIsGenerating(true);
+      const allQuestions = documents.flatMap(doc => doc.questions || []);
+      
+      if (allQuestions.length === 0) {
+        toast({
+          title: "No questions found",
+          description: "Your documents don't have any questions to generate a paper from",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Get current user ID directly from localStorage
+      const userId = localStorage.getItem('userId');
+      
+      if (!userId) {
+        toast({
+          title: "Authentication error",
+          description: "You need to be logged in to generate sample papers.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Use AI to generate a sample paper with subject and existing questions
       const samplePaper = await generateSamplePaper(
         allQuestions,
         subject.name,
         `${subject.name} Predicted Exam ${new Date().getFullYear()}`
       );
-      // Persist sample paper to backend
-      const userId = subject.userId || (subject.user && subject.user.id); // Adjust as needed
-      const res = await axios.post('/api/sample-papers', {
+      
+      // Ensure options are properly formatted
+      const formattedQuestions = samplePaper.questions.map(q => ({
+        ...q,
+        // If options is an array, convert to string
+        options: q.options ? 
+          (typeof q.options === 'string' ? q.options : JSON.stringify(q.options)) 
+          : null
+      }));
+      
+      console.log("Saving sample paper with data:", {
         userId,
         subjectId,
         title: samplePaper.title,
-        description: samplePaper.description,
-        totalMarks: samplePaper.totalMarks,
-        estimatedTime: samplePaper.estimatedTime,
-        questions: samplePaper.questions
+        description: samplePaper.description || "",
+        totalMarks: samplePaper.totalMarks || 0,
+        estimatedTime: samplePaper.estimatedTime || 0
       });
+      
+      // Use direct URL to backend to avoid proxy issues
+      const baseUrl = import.meta.env.DEV ? 'http://localhost:4000' : '/api';
+      const res = await axios.post(`${baseUrl}/api/sample-papers`, {
+        userId,
+        subjectId,
+        title: samplePaper.title,
+        description: samplePaper.description || "",
+        totalMarks: samplePaper.totalMarks || 0,
+        estimatedTime: samplePaper.estimatedTime || 0,
+        questions: formattedQuestions
+      });
+      
+      // Parse questions from response if needed
+      let parsedQuestions;
+      if (typeof res.data.questions === 'string') {
+        try {
+          parsedQuestions = JSON.parse(res.data.questions);
+        } catch (e) {
+          console.error('Error parsing questions from response:', e);
+          parsedQuestions = [];
+        }
+      } else {
+        parsedQuestions = res.data.questions || [];
+      }
+      
       const savedSamplePaper = {
         ...res.data,
-        questions: JSON.parse(res.data.questions)
+        questions: parsedQuestions
       };
+      
       setSamplePapers([savedSamplePaper, ...samplePapers]);
       toast({
         title: "Sample paper generated",
         description: "Your sample paper has been created successfully",
       });
       setActiveTab("samples");
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Sample paper generation failed:", error);
+      
+      // Handle specific error cases
+      let errorMessage = "There was an error generating your sample paper";
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error("Error response data:", error.response.data);
+        
+        if (error.response.status === 400) {
+          errorMessage = error.response.data.error || "Missing required fields";
+        } else if (error.response.status === 401 || error.response.status === 403) {
+          errorMessage = "Authentication error. Please log in again.";
+          // Force logout on auth errors
+          localStorage.removeItem("isLoggedIn");
+          setTimeout(() => navigate("/"), 2000);
+        } else if (error.response.status === 404) {
+          errorMessage = "Resource not found. The API endpoint may be unavailable.";
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = "Server not responding. Please try again later.";
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        errorMessage = error.message || "Unknown error occurred";
+      }
+      
       toast({
         title: "Generation failed",
-        description: "There was an error generating your sample paper",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -302,17 +378,11 @@ const Subject = () => {
               )}
               
               <div className="space-y-6">
-                {(selectedDocument?.questions || selectedSamplePaper?.questions || []).map((question, index) => (
+                {(selectedDocument?.questions || selectedSamplePaper?.questions || []).map((question) => (
                   <QuestionCard
                     key={question.id}
-                    id={question.id}
-                    questionText={question.text}
-                    options={question.options}
-                    type={question.type}
-                    difficulty={question.difficulty}
-                    answer={question.answer}
-                    explanation={question.explanation}
-                    source={selectedDocument ? selectedDocument.title : "AI Generated"}
+                    question={question}
+                    onAnswer={() => { /* static display */ }}
                   />
                 ))}
               </div>
@@ -486,6 +556,7 @@ const Subject = () => {
         onClose={() => setIsFileUploaderOpen(false)}
         onUploadSuccess={handleUploadSuccess}
         subjects={[subject?.name || ""]}
+        subjectId={subjectId}
       />
     </div>
   );

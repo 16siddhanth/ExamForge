@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 interface Subject {
   id: string;
   name: string;
-  mainTopics: string;
+  mainTopics: string | string[];
 }
 
 export default function Dashboard() {
@@ -22,12 +22,10 @@ export default function Dashboard() {
     if (!isLoggedIn) {
       navigate("/");
       return;
-    }
-
-    // Fetch subjects
+    }    // Fetch subjects
     const fetchSubjects = async () => {
       try {
-        const response = await axios.get("http://localhost:4000/api/subjects");
+        const response = await axios.get("/api/subjects");
         setSubjects(response.data);
       } catch (error) {
         console.error("Error fetching subjects:", error);
