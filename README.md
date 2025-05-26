@@ -128,10 +128,6 @@ npm run preview
 
 Feel free to submit issues and enhancement requests!
 
-## 📝 License
-
-[MIT License](LICENSE)
-
 ## 🧩 Key Components
 
 ### 🔹 Frontend Application
