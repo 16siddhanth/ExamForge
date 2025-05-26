@@ -2,26 +2,54 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubjects } from "@/hooks/useSubjects";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 import { BarChart3, BookOpen, Clock, FileText, LogOut, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const { subjects, isLoading } = useSubjects();
+  const { subjects, isLoading: subjectsLoading } = useSubjects();
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [quizzesLoading, setQuizzesLoading] = useState(true);
+  const [quizzesError, setQuizzesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchQuizzes = async () => {
+      try {
+        setQuizzesLoading(true);
+        const { data: quizResults, error } = await supabase
+          .from('quizzes')
+          .select(`
+            *,
+            subject:subjects(name)
+          `)
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(3);
+
+        if (error) throw error;
+        setQuizzes(quizResults || []);
+      } catch (err) {
+        console.error('Error fetching quizzes:', err);
+        setQuizzesError(err instanceof Error ? err.message : 'Failed to load quiz results');
+      } finally {
+        setQuizzesLoading(false);
+      }
+    };
+
+    fetchQuizzes();
+  }, [user]);
 
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  const recentSubjects = subjects.slice(0, 3);
-
-  const recentQuizzes = [
-    { id: 1, subject: "Mathematics", score: 85, total: 100, date: "Today" },
-    { id: 2, subject: "Physics", score: 92, total: 100, date: "Yesterday" },
-    { id: 3, subject: "Chemistry", score: 78, total: 100, date: "2 days ago" },
-  ];
-
-  if (isLoading) {
+  if (subjectsLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -31,6 +59,8 @@ const Dashboard = () => {
       </div>
     );
   }
+
+  const recentSubjects = subjects.slice(0, 3);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
@@ -76,9 +106,7 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Welcome back, {user.display_name}!
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome back, {user.email}!</h1>
           <p className="text-xl text-gray-600">Ready to continue your learning journey?</p>
         </div>
 
@@ -108,14 +136,14 @@ const Dashboard = () => {
             </Card>
           </Link>
 
-          <Link to="/subjects">
+          <Link to="/quiz">
             <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-purple-100 hover:border-purple-200">
               <CardHeader className="text-center">
                 <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
                 <CardTitle className="text-purple-900">Take Quiz</CardTitle>
-                <CardDescription>Select a subject to start a quiz</CardDescription>
+                <CardDescription>Test your knowledge</CardDescription>
               </CardHeader>
             </Card>
           </Link>
@@ -187,22 +215,41 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentQuizzes.map((quiz) => (
-                  <div key={quiz.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
-                    <div>
-                      <h3 className="font-semibold text-purple-900">{quiz.subject}</h3>
-                      <p className="text-sm text-gray-600">{quiz.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-purple-600">
-                        {quiz.score}/{quiz.total}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {Math.round((quiz.score / quiz.total) * 100)}%
-                      </div>
-                    </div>
+                {quizzesLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading quiz results...</p>
                   </div>
-                ))}
+                ) : quizzesError ? (
+                  <div className="text-center py-8">
+                    <FileText className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                    <p className="text-red-500">{quizzesError}</p>
+                  </div>
+                ) : quizzes.length > 0 ? (
+                  quizzes.map((quiz) => (
+                    <div key={quiz.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
+                      <div>
+                        <h3 className="font-semibold text-purple-900">{quiz.subject?.name || 'Unknown Subject'}</h3>
+                        <p className="text-sm text-gray-600">
+                          {quiz.completed_at ? format(new Date(quiz.completed_at), 'PPp') : 'Unknown date'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-purple-600">
+                          {quiz.score}/{quiz.total_questions}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {Math.round((quiz.score / quiz.total_questions) * 100)}%
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No quizzes completed yet. Take your first quiz to see results!</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

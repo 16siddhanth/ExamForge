@@ -1,8 +1,8 @@
 
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Upload, FileText, BarChart3, Users, CheckCircle } from "lucide-react";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart3, BookOpen, CheckCircle, FileText, Upload, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Index = () => {
   return (
@@ -49,13 +49,9 @@ const Index = () => {
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
             Transform your study materials with intelligent OCR, AI-generated questions, and comprehensive analytics. 
             Create, manage, and master exams with cutting-edge technology.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          </p>          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
               <Link to="/dashboard">Start Learning</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="border-purple-200 text-purple-600 hover:bg-purple-50">
-              <Link to="/subjects">View Demo</Link>
             </Button>
           </div>
         </div>

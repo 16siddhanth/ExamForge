@@ -249,29 +249,6 @@ export type Database = {
         }
         Relationships: []
       }
-      custom_users: {
-        Row: {
-          id: string
-          username: string
-          password_hash: string
-          display_name: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          username: string
-          password_hash: string
-          display_name: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          username?: string
-          password_hash?: string
-          display_name?: string
-          created_at?: string
-        }
-      }
     }
     Views: {
       [_ in never]: never

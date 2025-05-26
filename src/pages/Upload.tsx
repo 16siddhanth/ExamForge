@@ -1,63 +1,329 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import { useDocumentProcessing } from "@/hooks/useDocumentProcessing";
-import { useSubjects } from "@/hooks/useSubjects";
-import { AlertCircle, BookOpen, CheckCircle, FileText, LogOut, Upload } from "lucide-react";
-import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { useSubjects } from '@/hooks/useSubjects';
+import { supabase } from '@/integrations/supabase/client';
+import { BookOpen, CheckCircle, Clock, FileText, LogOut, Upload as UploadIcon, XCircle, Zap } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Link, Navigate } from 'react-router-dom';
 
-const UploadPage = () => {
+type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  status: UploadStatus;
+  progress: number;
+  subjectId?: string;
+  error?: string;
+  file?: File;
+  processingMode?: 'direct' | 'storage';
+}
+
+const Upload = () => {
   const { user, signOut } = useAuth();
   const { subjects } = useSubjects();
   const { toast } = useToast();
-  const { processDocument, processingStatus, processingError } = useDocumentProcessing();
-  
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [documentName, setDocumentName] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [topic, setTopic] = useState("");
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      if (!documentName) {
-        setDocumentName(file.name.replace(/\.[^/.]+$/, ""));
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const newFiles: UploadedFile[] = acceptedFiles.map(file => {
+      const directProcessingLimit = 5 * 1024 * 1024; // 5MB
+      const isSmallFile = file.size <= directProcessingLimit;
+      
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        status: 'idle' as UploadStatus,
+        progress: 0,
+        file,
+        processingMode: isSmallFile ? 'direct' : 'storage'
+      };
+    });
+    
+    setFiles(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'text/plain': ['.txt'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+    },
+    multiple: true
+  });
+
+  const uploadFileDirectly = async (fileId: string, file: File, subjectId: string) => {
+    console.log(`⚡ Starting direct upload for ${file.name} (${file.size} bytes)`);
+    
+    setFiles(prev => prev.map(f => 
+      f.id === fileId 
+        ? { ...f, status: 'uploading' as UploadStatus, subjectId }
+        : f
+    ));
+
+    try {
+      // Create FormData for direct upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subjectId', subjectId);
+      formData.append('fileName', file.name);
+
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Authentication required');
       }
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, progress: 25, status: 'processing' as UploadStatus }
+          : f
+      ));
+
+      // Send directly to the process-document function (supports both direct and storage processing)
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-document`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const result = await response.json();
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, progress: 100, status: 'success' as UploadStatus }
+          : f
+      ));
+
+      toast({
+        title: "Document processed successfully",
+        description: `Generated ${result.questionsGenerated} questions from your document using ${result.processingMode} mode.`
+      });
+
+      return result;
+
+    } catch (error: any) {
+      console.error('❌ Direct upload failed:', error);
+      
+      // Check if it's a CORS/network error (function not deployed)
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        console.log('🔄 Direct processing function not available, falling back to storage method...');
+        
+        toast({
+          title: "Falling back to storage method",
+          description: "Direct processing unavailable, using standard upload method.",
+        });
+        
+        // Fall back to storage-based processing
+        return await uploadFileViaStorage(fileId, file, subjectId);
+      }
+      
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, status: 'error' as UploadStatus, error: error.message }
+          : f
+      ));
+
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile || !documentName || !selectedSubject) {
+  const uploadFileViaStorage = async (fileId: string, file: File, subjectId: string) => {
+    console.log(`📦 Starting storage upload for ${file.name} (${file.size} bytes)`);
+    
+    setFiles(prev => prev.map(f => 
+      f.id === fileId 
+        ? { ...f, status: 'uploading' as UploadStatus, subjectId }
+        : f
+    ));
+
+    try {
+      // Upload to Supabase Storage
+      const filePath = `${user.id}/${fileId}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, progress: 50 }
+          : f
+      ));
+
+      // Create document record
+      const { data: document, error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: user.id,
+          subject_id: subjectId,
+          name: file.name,
+          file_path: filePath,
+          file_size: file.size,
+          file_type: file.type,
+          status: 'processing'
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, progress: 75, status: 'processing' as UploadStatus }
+          : f
+      ));
+
+      // Process document with AI using the original function
+      const { data, error } = await supabase.functions.invoke('process-document', {
+        body: { documentId: document.id }
+      });
+
+      if (error) throw new Error(error.message);
+
+      if (data.success) {
+        setFiles(prev => prev.map(f => 
+          f.id === fileId 
+            ? { ...f, progress: 100, status: 'success' as UploadStatus }
+            : f
+        ));
+
+        toast({
+          title: "Document processed successfully",
+          description: `Generated ${data.questionsGenerated} questions from your document using storage mode.`
+        });
+      } else {
+        throw new Error(data.error);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Storage upload failed:', error);
+      
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { ...f, status: 'error' as UploadStatus, error: error.message }
+          : f
+      ));
+
       toast({
-        title: "Missing information",
-        description: "Please fill in all required fields and select a file.",
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const uploadFile = async (fileId: string, file: File, subjectId: string) => {
+    const fileObj = files.find(f => f.id === fileId);
+    if (!fileObj) return;
+
+    if (fileObj.processingMode === 'direct') {
+      await uploadFileDirectly(fileId, file, subjectId);
+    } else {
+      await uploadFileViaStorage(fileId, file, subjectId);
+    }
+  };
+
+  const handleUploadAll = async () => {
+    if (!selectedSubject) {
+      toast({
+        title: "Please select a subject",
+        description: "You need to select a subject before uploading files.",
         variant: "destructive"
       });
       return;
     }
 
+    setIsProcessing(true);
+
+    const filesToUpload = files.filter(f => f.status === 'idle' && f.file);
+    
+    // Process files in parallel for better performance
+    const uploadPromises = filesToUpload.map(file => {
+      if (file.file) {
+        return uploadFile(file.id, file.file, selectedSubject);
+      }
+    });
+
     try {
-      // Process the document without needing to pass the API key
-      await processDocument({
-        file: selectedFile,
-        subjectId: selectedSubject,
-        name: documentName,
-        topic,
-        userId: user.id
-      });
-    } catch (error: any) {
-      console.error("Error processing document:", error);
+      await Promise.all(uploadPromises);
+    } catch (error) {
+      console.error('Batch upload error:', error);
+    } finally {
+      setIsProcessing(false);
     }
+  };
+
+  const getStatusIcon = (status: UploadStatus) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case 'error':
+        return <XCircle className="w-5 h-5 text-red-500" />;
+      case 'uploading':
+      case 'processing':
+        return <Clock className="w-5 h-5 text-blue-500 animate-spin" />;
+      default:
+        return <FileText className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const getStatusText = (status: UploadStatus) => {
+    switch (status) {
+      case 'uploading':
+        return 'Uploading...';
+      case 'processing':
+        return 'Processing with AI...';
+      case 'success':
+        return 'Completed';
+      case 'error':
+        return 'Failed';
+      default:
+        return 'Ready to upload';
+    }
+  };
+
+  const getProcessingModeIcon = (mode?: 'direct' | 'storage') => {
+    if (mode === 'direct') {
+      return (
+        <div title="Fast direct processing">
+          <Zap className="w-4 h-4 text-yellow-500" />
+        </div>
+      );
+    }
+    return (
+      <div title="Storage processing">
+        <FileText className="w-4 h-4 text-gray-500" />
+      </div>
+    );
   };
 
   return (
@@ -101,135 +367,143 @@ const UploadPage = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Upload Document</h1>
-          <p className="text-xl text-gray-600">Add new study materials with AI-powered question generation</p>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Upload Documents</h1>
+          <p className="text-xl text-gray-600">Upload your study materials to generate AI-powered quizzes</p>
+          <div className="mt-4 flex items-center space-x-4 text-sm text-gray-500">
+            <div className="flex items-center space-x-1">
+              <Zap className="w-4 h-4 text-yellow-500" />
+              <span>Files under 5MB: Direct processing (faster)</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <FileText className="w-4 h-4 text-gray-500" />
+              <span>Larger files: Storage processing</span>
+            </div>
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Upload Form */}
-          <Card className="border-purple-100">
-            <CardHeader>
-              <CardTitle className="text-purple-900">Document Details</CardTitle>
-              <CardDescription>Provide information about your document</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="document-name">Document Name</Label>
-                <Input
-                  id="document-name"
-                  placeholder="e.g., Chapter 5 - Derivatives"
-                  value={documentName}
-                  onChange={(e) => setDocumentName(e.target.value)}
-                  className="border-purple-200 focus:border-purple-400 focus:ring-purple-400"
-                />
-              </div>
+        {/* Subject Selection */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Select Subject</CardTitle>
+            <CardDescription>Choose which subject these documents belong to</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a subject" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((subject) => (
+                  <SelectItem key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {subjects.length === 0 && (
+              <Alert className="mt-4">
+                <AlertDescription>
+                  You need to create a subject first. 
+                  <Link to="/subjects" className="text-purple-600 hover:underline ml-1">
+                    Go to Subjects
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
 
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                  <SelectTrigger className="border-purple-200 focus:border-purple-400 focus:ring-purple-400">
-                    <SelectValue placeholder="Select a subject" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subjects.map((subject) => (
-                      <SelectItem key={subject.id} value={subject.id}>
-                        {subject.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="topic">Topic (Optional)</Label>
-                <Input
-                  id="topic"
-                  placeholder="e.g., Differentiation Rules"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  className="border-purple-200 focus:border-purple-400 focus:ring-purple-400"
-                />
-              </div>
-
-              {/* File Upload Area */}
-              <div className="space-y-2">
-                <Label>Document File</Label>
-                <div className="border-2 border-dashed border-purple-200 rounded-lg p-8 text-center hover:border-purple-300 transition-colors">
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.doc,.txt"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="w-12 h-12 text-purple-400 mx-auto mb-4" />
-                    <p className="text-lg font-medium text-gray-700 mb-2">
-                      Click to upload or drag and drop
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      PDF, DOCX, DOC, TXT files up to 10MB
-                    </p>
-                  </label>
+        {/* File Upload Area */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Upload Files</CardTitle>
+            <CardDescription>
+              Drag and drop files or click to browse. Small files (under 5MB) will be processed instantly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                isDragActive
+                  ? 'border-purple-400 bg-purple-50'
+                  : 'border-gray-300 hover:border-purple-400'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <UploadIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              {isDragActive ? (
+                <p className="text-purple-600">Drop the files here...</p>
+              ) : (
+                <div>
+                  <p className="text-gray-600 mb-2">
+                    Drag and drop files here, or click to select files
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Supports PDF, TXT, DOC, and DOCX files. Files under 5MB will be processed instantly.
+                  </p>
                 </div>
-                {selectedFile && (
-                  <div className="flex items-center space-x-2 text-sm text-purple-600 bg-purple-50 p-3 rounded-lg">
-                    <FileText className="w-4 h-4" />
-                    <span>{selectedFile.name}</span>
-                  </div>
-                )}
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-                <Button
-                  onClick={handleUpload}
-                  disabled={processingStatus === "processing"}
-                  className="w-full mt-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-                >
-                  {processingStatus === "processing" ? "Processing..." : "Upload & Generate Questions"}
-                </Button>
-
-                {processingStatus === "success" && (
-                  <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <p className="font-medium text-green-800">Processing Complete!</p>
-                    </div>
-                    <p className="text-sm text-green-700 mt-1">
-                      Your document has been processed successfully. Questions have been generated.
-                    </p>
-                    <div className="mt-4 flex space-x-2">
-                      <Link to="/subjects">
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                          View in Subject
-                        </Button>
-                      </Link>
-                      <Link to="/subjects">
-                        <Button size="sm" variant="outline" className="border-green-600 text-green-600 hover:bg-green-50">
-                          Take Quiz
-                        </Button>
-                      </Link>
+        {/* File List */}
+        {files.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Files to Upload</CardTitle>
+                <CardDescription>{files.length} files selected</CardDescription>
+              </div>
+              <Button
+                onClick={handleUploadAll}
+                disabled={!selectedSubject || files.every(f => f.status !== 'idle') || isProcessing}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                {isProcessing ? 'Processing...' : 'Upload All'}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {files.map((file) => (
+                  <div key={file.id} className="flex items-center space-x-4 p-4 border rounded-lg">
+                    {getStatusIcon(file.status)}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium">{file.name}</span>
+                          {getProcessingModeIcon(file.processingMode)}
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm text-gray-600">{getStatusText(file.status)}</span>
+                        {(file.status === 'uploading' || file.status === 'processing') && (
+                          <Progress value={file.progress} className="flex-1" />
+                        )}
+                      </div>
+                      {file.error && (
+                        <p className="text-sm text-red-600 mt-1">{file.error}</p>
+                      )}
+                      {file.processingMode === 'direct' && file.status === 'idle' && (
+                        <p className="text-sm text-yellow-600 mt-1">
+                          ⚡ Will use fast direct processing
+                        </p>
+                      )}
                     </div>
                   </div>
-                )}
-
-                {processingStatus === "error" && (
-                  <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="w-5 h-5 text-red-600" />
-                      <p className="font-medium text-red-800">Processing Failed</p>
-                    </div>
-                    <p className="text-sm text-red-700 mt-1">
-                      {processingError?.message || "There was an error processing your document. Please try again."}
-                    </p>
-                  </div>
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default UploadPage;
+export default Upload;

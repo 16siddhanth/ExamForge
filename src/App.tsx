@@ -1,3 +1,4 @@
+
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -41,13 +42,12 @@ const App = () => (
               <ProtectedRoute>
                 <SubjectDetail />
               </ProtectedRoute>
-            } />
-            <Route path="/upload" element={
+            } />            <Route path="/upload" element={
               <ProtectedRoute>
                 <Upload />
               </ProtectedRoute>
             } />
-            <Route path="/quiz/:id" element={
+            <Route path="/quiz" element={
               <ProtectedRoute>
                 <Quiz />
               </ProtectedRoute>

@@ -1,12 +1,13 @@
+
+import { useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuth } from '@/contexts/AuthContext';
+import { BookOpen, User, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Lock, User } from 'lucide-react';
-import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
 
 const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -37,10 +38,9 @@ const Auth = () => {
           });
         } else {
           toast({
-            title: "Account created!",
-            description: "You can now sign in with your username and password."
+            title: "Account created successfully!",
+            description: "You are now logged in and ready to start learning."
           });
-          setIsSignUp(false); // Switch to sign in view
         }
       } else {
         const { error } = await signIn(username, password);
@@ -49,6 +49,11 @@ const Auth = () => {
             title: "Sign in failed",
             description: error.message,
             variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Welcome back!",
+            description: "You have successfully signed in."
           });
         }
       }
@@ -89,8 +94,8 @@ const Auth = () => {
             </CardTitle>
             <CardDescription>
               {isSignUp 
-                ? 'Sign up to start your learning journey'
-                : 'Sign in to access your study materials'
+                ? 'Create your account with a username and password'
+                : 'Sign in with your username and password'
               }
             </CardDescription>
           </CardHeader>
@@ -104,11 +109,10 @@ const Auth = () => {
                     <Input
                       id="displayName"
                       type="text"
-                      placeholder="Your name"
+                      placeholder="Your display name"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       className="pl-10 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
-                      required={isSignUp}
                     />
                   </div>
                 </div>
@@ -121,7 +125,7 @@ const Auth = () => {
                   <Input
                     id="username"
                     type="text"
-                    placeholder="Enter username"
+                    placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="pl-10 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
