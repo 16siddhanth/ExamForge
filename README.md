@@ -1,6 +1,6 @@
 # ExamForge
-
-**ExamForge** is an AI-powered web platform designed to help students prepare for exams. Its primary function is to transform study materials (like PDFs and DOCX files) into interactive learning experiences. It uses AI to process uploaded documents, extract relevant content, and generate practice questions. Users can then take quizzes based on this generated content, organize their study materials by subject, and track their progress through analytics.
+<img src="public/favicon.ico" alt="ExamForge Logo" height="250">
+**ExamForge** is an AI-powered platform designed to help students prepare for exams. Its primary function is to transform study materials like PYQs(PDFs and DOCX files) into interactive learning experiences. It uses AI to process uploaded documents, extract relevant content, and generate practice questions. Users can then take quizzes based on this generated content, organize their study materials by subject, and track their progress through analytics.
 
 ---
 
