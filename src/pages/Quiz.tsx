@@ -1,521 +1,326 @@
-import Navbar from "@/components/Navbar";
-import QuestionCard from "@/components/QuestionCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast";
-import axios from "axios";
-import { ArrowLeft, ArrowRight, Award, BookOpen, CheckCircle, Clock, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuiz } from "@/hooks/useQuiz";
+import { ArrowRight, BookOpen, CheckCircle, Clock, RotateCcw } from "lucide-react";
+import { useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-interface Subject {
-  id: string;
-  name: string;
-  mainTopics: string[];
-}
-
-interface QuizQuestion {
-  id: string;
-  text: string;
-  type: "multiple-choice" | "short-answer" | "long-answer";
-  options?: Option[];
-  answer?: string;
-  explanation?: string;
-  marks?: number;
-  difficulty?: "easy" | "medium" | "hard";
-  topic?: string;
-  userAnswer?: string;
-  isCorrect?: boolean;
-}
-
-interface Option {
-  id: string;
-  text: string;
-  isCorrect: boolean;
-}
-
-interface QuizAttempt {
-  id: string;
-  userId: string;
-  title: string;
-  score: number;
-  date: string;
-  questions: {
-    questions: QuizQuestion[];
-    timeSpent: number;
-    subjectId: string;
-  };
-}
-
-// API functions
-async function fetchSubjects() {
-  try {
-    const response = await axios.get<Subject[]>("/api/subjects");
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching subjects:", error);
-    throw error;
-  }
-}
-
-async function fetchQuizHistory(userId: string) {
-  try {
-    const response = await axios.get<QuizAttempt[]>(`/api/quizzes/${userId}`);
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching quiz history:", error);
-    throw error;
-  }
-}
-
-async function generateQuiz(subjectId: string, topic?: string) {
-  try {
-    const response = await axios.post<{ questions: QuizQuestion[] }>("/api/quizzes/generate", {
-      subjectId,
-      topic
-    });
-    return response.data.questions;
-  } catch (error) {
-    console.error("Error generating quiz:", error);
-    throw error;
-  }
-}
-
-async function saveQuizAttempt(data: {
-  userId: string;
-  subjectId: string;
-  title: string;
-  questions: QuizQuestion[];
-  score: number;
-  timeSpent: number;
-}) {
-  try {
-    const response = await axios.post<QuizAttempt>("/api/quizzes", data);
-    return response.data;
-  } catch (error) {
-    console.error("Error saving quiz attempt:", error);
-    throw error;
-  }
-}
-
-export default function Quiz() {
+const Quiz = () => {
+  const { quizId } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const { subjectId } = useParams<{ subjectId?: string }>();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>(subjectId || "");
-  const [selectedTopic, setSelectedTopic] = useState<string>("");
-  const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>(subjectId ? "quiz" : "start");
-  const [quizStarted, setQuizStarted] = useState<boolean>(!!subjectId);
-  const [quizCompleted, setQuizCompleted] = useState<boolean>(false);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [timeSpent, setTimeSpent] = useState<number>(0);
-  const [score, setScore] = useState<number>(0);
+  const { user } = useAuth();
+  const {
+    quiz,
+    isLoadingQuiz,
+    quizError,
+    currentQuestionIndex,
+    setCurrentQuestionIndex,
+    userAnswers,
+    submitAnswer,
+    completeQuiz
+  } = useQuiz(quizId);
+
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      navigate("/");
-      return;
+    if (!user) {
+      navigate("/auth");
     }
+  }, [user, navigate]);
 
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const [subjectsData, quizHistoryData] = await Promise.all([
-          fetchSubjects(),
-          fetchQuizHistory(userId)
-        ]);        setSubjects(subjectsData);
-        setQuizHistory(quizHistoryData);
-        
-        // If a subject ID is provided via URL parameter, start quiz automatically
-        if (subjectId) {
-          setSelectedSubject(subjectId);
-          // Use the existing startQuiz function to start a quiz with the subject ID
-          setTimeout(() => {
-            startQuiz();
-          }, 300); // Small delay to ensure the state is updated
-        }
-      } catch (error) {
-        console.error("Error loading data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load quiz data. Please try again.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [navigate, toast]);
-
-  const startQuiz = async () => {
-    if (!selectedSubject) {
-      toast({
-        title: "Error",
-        description: "Please select a subject to start the quiz.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      const generatedQuestions = await generateQuiz(selectedSubject, selectedTopic);
-      setQuestions(generatedQuestions);
-      setCurrentQuestionIndex(0);
-      setStartTime(Date.now());
-      setQuizStarted(true);
-      setQuizCompleted(false);
-      setActiveTab("quiz");
-    } catch (error) {
-      console.error("Error starting quiz:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate quiz questions. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAnswer = (questionId: string, answer: string) => {
-    setQuestions(prevQuestions => 
-      prevQuestions.map(q => 
-        q.id === questionId 
-          ? { ...q, userAnswer: answer, isCorrect: answer === q.answer }
-          : q
-      )
+  // Handle quiz error state
+  if (quizError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Quiz</h2>
+          <p className="text-gray-600 mb-6">{quizError.message}</p>
+          <div className="space-x-4">
+            <Button 
+              onClick={() => window.location.reload()}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+            >
+              Try Again
+            </Button>
+            <Link to="/subjects">
+              <Button variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50">
+                Back to Subjects
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
     );
+  }
+
+  if (isLoadingQuiz || !quiz) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading quiz...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!quiz.questions || quiz.questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Quiz Error</h2>
+          <p className="text-gray-600 mb-6">No questions found for this quiz.</p>
+          <Link to="/subjects">
+            <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+              Back to Subjects
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = quiz.questions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
+  const answeredQuestions = Object.keys(userAnswers).length;
+
+  const handleAnswerSelect = async (answer: string) => {
+    await submitAnswer({
+      quizId: quiz.id,
+      questionId: currentQuestion.id,
+      answer
+    });
   };
 
-  const nextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
+  const handleNext = () => {
+    if (currentQuestionIndex < quiz.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      completeQuiz();
+      completeQuiz(quiz.id);
     }
   };
 
-  const previousQuestion = () => {
+  const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
     }
   };
 
-  const completeQuiz = async () => {
-    const endTime = Date.now();
-    const timeSpentInSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-    setTimeSpent(timeSpentInSeconds);
-
-    const calculatedScore = questions.reduce((acc, q) => acc + (q.isCorrect ? 1 : 0), 0);
-    const scorePercentage = Math.round((calculatedScore / questions.length) * 100);
-    setScore(scorePercentage);
-
-    try {
-      const userId = localStorage.getItem("userId");
-      if (!userId) throw new Error("User not found");
-
-      await saveQuizAttempt({
-        userId,
-        subjectId: selectedSubject,
-        title: `${subjects.find(s => s.id === selectedSubject)?.name} Quiz`,
-        questions,
-        score: scorePercentage,
-        timeSpent: timeSpentInSeconds
-      });
-
-      setQuizCompleted(true);
-      setActiveTab("results");
-      
-      // Refresh quiz history
-      const updatedHistory = await fetchQuizHistory(userId);
-      setQuizHistory(updatedHistory);
-    } catch (error) {
-      console.error("Error saving quiz:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save quiz results. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const restartQuiz = () => {
-    setSelectedSubject("");
-    setSelectedTopic("");
-    setQuestions([]);
-    setCurrentQuestionIndex(0);
-    setStartTime(null);
-    setTimeSpent(0);
-    setScore(0);
-    setQuizStarted(false);
-    setQuizCompleted(false);
-    setActiveTab("start");
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("userId");
-    localStorage.removeItem("isLoggedIn");
-    navigate("/");
-  };
-
-  const renderCurrentQuestion = () => {
-    const question = questions[currentQuestionIndex];
-    if (!question) return null;
-
+  if (quiz.status === "completed") {
+    const score = quiz.score || 0;
+    
     return (
-      <div className="space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm text-gray-500">Question {currentQuestionIndex + 1} of {questions.length}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {question.topic && (
-              <span className="text-sm text-gray-500">Topic: {question.topic}</span>
-            )}
-            {question.difficulty && (
-              <span className="text-sm text-gray-500">Difficulty: {question.difficulty}</span>
-            )}
-          </div>
-        </div>
-
-        <QuestionCard
-          question={question}
-          onAnswer={handleAnswer}
-        />
-
-        <div className="flex justify-between mt-8">
-          <Button
-            onClick={previousQuestion}
-            disabled={currentQuestionIndex === 0}
-            variant="outline"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Previous
-          </Button>
-          <Button
-            onClick={nextQuestion}
-            disabled={!question.userAnswer}
-          >
-            {currentQuestionIndex === questions.length - 1 ? (
-              <>
-                Complete Quiz
-                <CheckCircle className="ml-2 h-4 w-4" />
-              </>
-            ) : (
-              <>
-                Next
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderQuizResults = () => {
-    return (
-      <div className="space-y-8">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Award className="h-4 w-4" />
-                Score
-              </CardTitle>
-              <CardDescription>{score}%</CardDescription>
-            </CardHeader>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Time Spent
-              </CardTitle>
-              <CardDescription>
-                {Math.floor(timeSpent / 60)}m {timeSpent % 60}s
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                Questions
-              </CardTitle>
-              <CardDescription>
-                {questions.filter(q => q.isCorrect).length} / {questions.length} correct
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Questions Review</h3>
-          {questions.map((question, index) => (
-            <div key={question.id} className="border rounded-lg p-4">
-              <p className="font-medium mb-2">
-                {index + 1}. {question.text}
-              </p>
-              {question.options?.map(option => (
-                <div
-                  key={option.id}
-                  className={
-                    "px-4 py-2 " +
-                    (option.isCorrect ? "text-green-600 font-medium" :
-                     question.userAnswer === option.id ? "text-red-600" : "")
-                  }
-                >
-                  {option.text}
-                  {option.isCorrect && " ✓"}
-                  {!option.isCorrect && question.userAnswer === option.id && " ✗"}
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
+        {/* Navigation */}
+        <nav className="bg-white/80 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between h-16 items-center">
+              <Link to="/" className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-white" />
                 </div>
-              ))}
-              {question.answer && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium">Suggested Answer:</p>
-                  <p className="text-sm text-gray-700 mt-1">{question.answer}</p>
-                </div>
-              )}
-              {question.explanation && (
-                <div className="mt-2 bg-gray-50 p-2 rounded">
-                  <p className="text-sm font-medium">Explanation:</p>
-                  <p className="text-sm text-gray-700 mt-1">{question.explanation}</p>
-                </div>
-              )}
+                <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  ExamForge
+                </span>
+              </Link>
+              <div className="flex items-center space-x-4">
+                <Link to="/dashboard">
+                  <Button variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Link to="/analytics">
+                  <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                    View Analytics
+                  </Button>
+                </Link>
+              </div>
             </div>
-          ))}
-        </div>
-        
-        <div className="mt-8 flex justify-center">
-          <Button onClick={restartQuiz} className="bg-exam-purple hover:bg-exam-darkPurple">
-            Start New Quiz
-          </Button>
+          </div>
+        </nav>
+
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Quiz Complete!</h1>
+            <p className="text-xl text-gray-600">Here are your results</p>
+          </div>
+
+          {/* Score Card */}
+          <Card className="max-w-2xl mx-auto mb-8 border-purple-100">
+            <CardHeader className="text-center">
+              <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">{score}%</span>
+              </div>
+              <CardTitle className="text-2xl text-purple-900">Your Score</CardTitle>
+              <CardDescription>
+                You got {Math.round((score / 100) * quiz.total_questions)} out of {quiz.total_questions} questions correct
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex space-x-4 justify-center">
+                <Link to="/subjects">
+                  <Button variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50">
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Back to Subjects
+                  </Button>
+                </Link>
+                <Link to="/analytics">
+                  <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                    View Detailed Analytics
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Question Review */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900 text-center">Question Review</h2>
+            {quiz.questions.map((question, index) => {
+              const userAnswer = userAnswers[question.id];
+              const isCorrect = userAnswer === question.correct_answer;
+              
+              return (
+                <Card key={question.id} className={`border-2 ${isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">Question {index + 1}</CardTitle>
+                      {isCorrect ? (
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center">
+                          <span className="text-white text-sm">✗</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-gray-700">{question.question_text}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 mb-4">
+                      <p className="text-sm">
+                        <span className="font-medium">Your answer:</span> 
+                        <span className={userAnswer === question.correct_answer ? 'text-green-600' : 'text-red-600'}>
+                          {userAnswer || 'Not answered'}
+                        </span>
+                      </p>
+                      {!isCorrect && (
+                        <p className="text-sm">
+                          <span className="font-medium">Correct answer:</span> 
+                          <span className="text-green-600">{question.correct_answer}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <span className="font-medium">Explanation:</span> {question.explanation}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar isLoggedIn={true} onLogout={handleLogout} />
-      
-      <main className="container mx-auto px-4 py-24">
-        <div className="mb-8">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center text-gray-600 hover:text-exam-purple mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </button>
-          
-          <h1 className="text-3xl font-bold mb-2">Practice Quiz</h1>
-          <p className="text-gray-600">Test your knowledge with AI-generated questions based on your study materials</p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
+      {/* Navigation */}
+      <nav className="bg-white/80 backdrop-blur-sm border-b border-purple-100 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <Link to="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                ExamForge
+              </span>
+            </Link>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <Clock className="w-4 h-4" />
+                <span>Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="start" disabled={quizStarted && !quizCompleted}>Quiz Setup</TabsTrigger>
-            <TabsTrigger value="quiz" disabled={!quizStarted || quizCompleted}>Active Quiz</TabsTrigger>
-            <TabsTrigger value="results" disabled={!quizCompleted}>Results</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="start">
-            <Card>
-              <CardHeader>
-                <CardTitle>Quiz Setup</CardTitle>
-                <CardDescription>
-                  {quizHistory.length > 0
-                    ? `You've completed ${quizHistory.length} ${quizHistory.length === 1 ? 'quiz' : 'quizzes'} so far.`
-                    : "Take your first quiz to test your knowledge!"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Subject</label>
-                    <Select
-                      value={selectedSubject}
-                      onValueChange={setSelectedSubject}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map(subject => (
-                          <SelectItem key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+      </nav>
 
-                  {selectedSubject && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Select Topic (Optional)</label>
-                      <Select
-                        value={selectedTopic}
-                        onValueChange={setSelectedTopic}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose a topic" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {subjects
-                            .find(s => s.id === selectedSubject)
-                            ?.mainTopics.map(topic => (
-                              <SelectItem key={topic} value={topic}>
-                                {topic}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={startQuiz}
-                  disabled={!selectedSubject || isLoading}
-                  className="w-full"
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-gray-700">Progress</span>
+            <span className="text-sm text-gray-500">{answeredQuestions}/{quiz.questions.length} answered</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+
+        {/* Question Card */}
+        <Card className="mb-8 border-purple-100">
+          <CardHeader>
+            <CardTitle className="text-xl text-purple-900">
+              Question {currentQuestionIndex + 1}
+            </CardTitle>
+            <p className="text-lg text-gray-700">{currentQuestion.question_text}</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {currentQuestion.options.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAnswerSelect(option)}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                    userAnswers[currentQuestion.id] === option
+                      ? 'border-purple-500 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 hover:border-purple-300 hover:bg-purple-25'
+                  }`}
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Quiz...
-                    </>
-                  ) : (
-                    "Start Quiz"
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      userAnswers[currentQuestion.id] === option
+                        ? 'border-purple-500 bg-purple-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {userAnswers[currentQuestion.id] === option && (
+                        <div className="w-2 h-2 bg-white rounded-full" />
+                      )}
+                    </div>
+                    <span className="font-medium">{String.fromCharCode(65 + index)}.</span>
+                    <span>{option}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Navigation */}
+        <div className="flex justify-between">
+          <Button
+            onClick={handlePrevious}
+            disabled={currentQuestionIndex === 0}
+            variant="outline"
+            className="border-purple-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50"
+          >
+            Previous
+          </Button>
           
-          <TabsContent value="quiz">
-            {renderCurrentQuestion()}
-          </TabsContent>
-          
-          <TabsContent value="results">
-            {renderQuizResults()}
-          </TabsContent>
-        </Tabs>
-      </main>
+          <Button
+            onClick={handleNext}
+            disabled={!userAnswers[currentQuestion.id]}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+          >
+            {currentQuestionIndex === quiz.questions.length - 1 ? 'Finish Quiz' : 'Next'}
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default Quiz;

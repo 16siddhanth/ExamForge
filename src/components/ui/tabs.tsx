@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
 
@@ -51,41 +50,4 @@ const TabsContent = React.forwardRef<
 ))
 TabsContent.displayName = TabsPrimitive.Content.displayName
 
-// Create a context to track if TabsContent is within Tabs
-const TabsContext = React.createContext(false);
-
-// Export the context provider from the Tabs component
-const TabsWithContext = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>
->(({ children, ...props }, ref) => (
-  <Tabs ref={ref} {...props}>
-    <TabsContext.Provider value={true}>{children}</TabsContext.Provider>
-  </Tabs>
-));
-TabsWithContext.displayName = "TabsWithContext";
-
-// Modify TabsContent to check for proper nesting
-const SafeTabsContent = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
->(({ className, ...props }, ref) => {
-  const withinTabs = React.useContext(TabsContext);
-  
-  // If already within TabsContext, render directly
-  if (withinTabs) {
-    return <TabsContent ref={ref} className={className} {...props} />;
-  }
-  
-  // If not within Tabs, wrap it in a Tabs component with invisible styling
-  return (
-    <Tabs defaultValue={props.value?.toString() || "tab"} className="hidden">
-      <TabsContext.Provider value={true}>
-        <TabsContent ref={ref} className={className} {...props} />
-      </TabsContext.Provider>
-    </Tabs>
-  );
-});
-SafeTabsContent.displayName = "SafeTabsContent";
-
-export { TabsWithContext as Tabs, TabsList, TabsTrigger, SafeTabsContent as TabsContent }
+export { Tabs, TabsList, TabsTrigger, TabsContent }
