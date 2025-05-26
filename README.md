@@ -1,73 +1,75 @@
-# Welcome to your Lovable project
+# ExamForge
 
-## Project info
+**ExamForge** is an AI-powered web platform designed to help students prepare for exams. Its primary function is to transform study materials (like PDFs and DOCX files) into interactive learning experiences. It uses AI to process uploaded documents, extract relevant content, and generate practice questions. Users can then take quizzes based on this generated content, organize their study materials by subject, and track their progress through analytics.
 
-**URL**: https://lovable.dev/projects/cc486d40-3717-41ed-b4bc-59aa0d63b010
+---
 
-## How can I edit this code?
+## 🛠 Technologies Used
 
-There are several ways of editing your application.
+- **Frontend:**
+  - React
+  - Vite
+  - TypeScript
+  - Tailwind CSS
+  - shadcn-ui (based on Radix UI)
+  - React Router DOM
 
-**Use Lovable**
+- **Backend:**
+  - Supabase
+    - Authentication
+    - Database
+    - File Storage (likely used for uploaded documents)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/cc486d40-3717-41ed-b4bc-59aa0d63b010) and start prompting.
+- **AI:**
+  - Google Generative AI
+  - OCR (Optical Character Recognition)
+  - Question Generation
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🧩 Key Components
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 🔹 Frontend Application
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+A single-page application (SPA) built with React. Key elements include:
 
-Follow these steps:
+- **Pages:**
+  - Dashboard
+  - Subjects
+  - Analytics
+  - Quiz
+  - Upload
+  - Authentication
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- **UI Library:**
+  - `shadcn-ui` (built on Radix UI)
+  - Tailwind CSS for styling
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- **Navigation:**
+  - Managed by React Router DOM
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 🔹 Supabase Backend
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+- **Authentication:**
+  - Handles user sign-up and sign-in.
 
-**Edit a file directly in GitHub**
+- **Database:**
+  - Stores:
+    - User data
+    - Subjects
+    - Uploaded documents
+    - Generated questions
+    - Quiz results
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **File Storage:**
+  - Used to store uploaded study materials.
 
-**Use GitHub Codespaces**
+### 🔹 AI Integration
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- **OCR:**
+  - Extracts text and possibly questions from document images or non-text formats.
 
-## What technologies are used for this project?
+- **Question Generation:**
+  - Uses Google Generative AI to create practice questions from uploaded content.
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/cc486d40-3717-41ed-b4bc-59aa0d63b010) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
