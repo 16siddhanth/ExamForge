@@ -56,7 +56,7 @@ GEMINI_API_KEY=your_gemini_api_key
    - Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
    - Sign in with your Google account
    - Click "Create API Key"
-   - Copy the generated key (starts with `AIza...`)
+   - Copy the generated key
 
 2. **Configure API Key**
    - Add the key to your `.env` file
