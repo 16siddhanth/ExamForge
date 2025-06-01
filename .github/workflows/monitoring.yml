@@ -1,33 +1,33 @@
-name: Monitoring
+#name: Monitoring
 
-on:
-  schedule:
-    - cron: '*/30 * * * *'  # Run every 30 minutes
-  workflow_dispatch:  # Allow manual trigger
+#on:
+#  schedule:
+#    - cron: '*/30 * * * *'  # Run every 30 minutes
+#  workflow_dispatch:  # Allow manual trigger
 
-jobs:
-  uptime-monitor:
-    runs-on: ubuntu-latest
+#jobs:
+#  uptime-monitor:
+#    runs-on: ubuntu-latest
     
-    steps:
-    - name: Check website availability
-      uses: jtalk/url-health-check-action@v4
-      with:
-        url: ${{ secrets.PRODUCTION_URL }}
-        max-attempts: 3
-        retry-delay: 10s
+#    steps:
+#    - name: Check website availability
+#      uses: jtalk/url-health-check-action@v4
+#      with:
+#        url: ${{ secrets.PRODUCTION_URL }}
+#        max-attempts: 3
+#        retry-delay: 10s
     
-    - name: Response time monitoring
-      uses: lowlighter/metrics@latest
-      with:
-        token: ${{ secrets.METRICS_TOKEN }}
-        config_timezone: UTC
-        plugin_pagespeed: yes
-        plugin_pagespeed_url: ${{ secrets.PRODUCTION_URL }}
+#    - name: Response time monitoring
+#      uses: lowlighter/metrics@latest
+#      with:
+#        token: ${{ secrets.METRICS_TOKEN }}
+#        config_timezone: UTC
+#        plugin_pagespeed: yes
+#        plugin_pagespeed_url: ${{ secrets.PRODUCTION_URL }}
     
-    - name: Performance monitoring with Lighthouse
-      uses: treosh/lighthouse-ci-action@v9
-      with:
-        urls: ${{ secrets.PRODUCTION_URL }}
-        uploadArtifacts: true
-        temporaryPublicStorage: true
+#    - name: Performance monitoring with Lighthouse
+#      uses: treosh/lighthouse-ci-action@v9
+#      with:
+#        urls: ${{ secrets.PRODUCTION_URL }}
+#        uploadArtifacts: true
+#        temporaryPublicStorage: true
