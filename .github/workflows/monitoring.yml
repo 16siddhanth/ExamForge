@@ -31,13 +31,3 @@ jobs:
         urls: ${{ secrets.PRODUCTION_URL }}
         uploadArtifacts: true
         temporaryPublicStorage: true
-        
-    - name: Send alert on failure
-      if: failure()
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        SLACK_COLOR: '#FF0000'
-        SLACK_USERNAME: 'Monitoring Bot'
-        SLACK_TITLE: 'Monitoring Alert'
-        SLACK_MESSAGE: 'Website monitoring check failed!'
