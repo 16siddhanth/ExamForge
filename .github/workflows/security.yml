@@ -6,10 +6,11 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    - cron: '0 0 1-31/2 * *'
+    - cron: '0 0 1-31/2 * *'  # Every 2 days
 
 permissions:
-  security-events: write
+  contents: read  # ✅ Read-only; avoids PR/issue creation
+  security-events: write  # Needed for CodeQL to upload results
 
 jobs:
   security-scan:
@@ -26,7 +27,7 @@ jobs:
         command: test
         args: --severity-threshold=high
 
-    - name: Run CodeQL Analysis
+    - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: javascript,typescript
@@ -36,9 +37,9 @@ jobs:
       id: codeql-analyze
       uses: github/codeql-action/analyze@v3
       continue-on-error: true
-      
+
     - name: Check CodeQL status
-      if: always()           
+      if: always()
       run: |
         if [ "${{ steps.codeql-analyze.outcome }}" != "success" ]; then
           echo "::warning ::CodeQL analysis failed but workflow is continuing."
@@ -59,4 +60,15 @@ jobs:
       uses: zaproxy/action-full-scan@v0.7.0
       with:
         target: ${{ secrets.PRODUCTION_URL }}
-        fail_action: false  # Don't fail the build for medium/low severity findings
+        fail_action: false  # Don’t fail on warnings
+
+    - name: Upload ZAP HTML Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-html-report
+        path: report_html.html
+
+    - name: Upload ZAP Markdown Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-md-
