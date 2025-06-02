@@ -1,5 +1,5 @@
-[[allowlist]]
-  # Ignore this exact publishable key string
-  regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzeXBqaHhmbHFkbHlkdXJ4c296Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgxODYxMTgsImV4cCI6MjA2Mzc2MjExOH0\.eRoi0omaiJ01VuGPni0_KSw5kGhcSBaZDNkSdhaJnzU'''
-  # Only allowlist it in this specific file path
+[allowlist]
+  regexes = [
+    '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzeXBqaHhmbHFkbHlkdXJ4c296Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgxODYxMTgsImV4cCI6MjA2Mzc2MjExOH0\.eRoi0omaiJ01VuGPni0_KSw5kGhcSBaZDNkSdhaJnzU'''
+  ]
   paths = ["src/integrations/supabase/client.ts"]
