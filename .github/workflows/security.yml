@@ -71,4 +71,11 @@ jobs:
     - name: Upload ZAP Markdown Report
       uses: actions/upload-artifact@v4
       with:
-        name: zap-md-
+        name: zap-md-report
+        path: report_md.md
+
+    - name: Upload ZAP JSON Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-json-report
+        path: report_json.json
