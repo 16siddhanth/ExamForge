@@ -6,7 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    - cron: '0 0 1-31/2 * *' 
+    - cron: '0 0 1-31/2 * *'
+
+permissions:
+  security-events: write
 
 jobs:
   security-scan:
@@ -24,14 +27,14 @@ jobs:
         args: --severity-threshold=high
 
     - name: Run CodeQL Analysis
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
-        languages: javascript
+        languages: javascript,typescript
         queries: security-extended
 
     - name: Perform CodeQL Analysis
       id: codeql-analyze
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
       continue-on-error: true
       
     - name: Check CodeQL status
