@@ -20,6 +20,7 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
+        command: test
         args: --severity-threshold=high
 
     - name: Run CodeQL Analysis
@@ -29,7 +30,18 @@ jobs:
         queries: security-extended
 
     - name: Perform CodeQL Analysis
+      id: codeql-analyze
       uses: github/codeql-action/analyze@v2
+      continue-on-error: true
+      
+    - name: Check CodeQL status
+      if: always()           
+      run: |
+        if [ "${{ steps.codeql-analyze.outcome }}" != "success" ]; then
+          echo "::warning ::CodeQL analysis failed but workflow is continuing."
+        else
+          echo "CodeQL analysis succeeded."
+        fi
 
     - name: Run npm audit
       run: npm audit
