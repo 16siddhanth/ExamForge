@@ -24,6 +24,7 @@ jobs:
           config_timezone: UTC
           plugin_pagespeed: yes
           plugin_pagespeed_url: ${{ secrets.PRODUCTION_URL }}
+        timeout-minutes: 5
 
       - name: Performance monitoring with Lighthouse
         uses: treosh/lighthouse-ci-action@v9
@@ -31,3 +32,4 @@ jobs:
           urls: ${{ secrets.PRODUCTION_URL }}
           uploadArtifacts: true
           temporaryPublicStorage: true
+        timeout-minutes: 5
