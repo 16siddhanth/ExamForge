@@ -27,7 +27,7 @@ jobs:
         with:
           build: npm run build
           start: npm run preview
-          wait-on: 'http://localhost:8080'
+          wait-on: 'http://localhost:4173'
           browser: chrome
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
