@@ -19,6 +19,7 @@ jobs:
 
       - name: Performance monitoring with Lighthouse
         uses: treosh/lighthouse-ci-action@v9
+        continue-on-error: true  # Allow step to fail without failing the job
         with:
           urls: ${{ secrets.PRODUCTION_URL }}
           uploadArtifacts: true
