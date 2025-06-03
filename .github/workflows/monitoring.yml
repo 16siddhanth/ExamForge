@@ -17,13 +17,6 @@ jobs:
           max-attempts: 3
           retry-delay: 10s
 
-      - name: Response time monitoring
-        uses: lowlighter/metrics@latest
-        with:
-          token: ${{ secrets.METRICS_TOKEN }}
-          config_timezone: UTC
-          plugin_pagespeed: no
-
       - name: Performance monitoring with Lighthouse
         uses: treosh/lighthouse-ci-action@v9
         with:
