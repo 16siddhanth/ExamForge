@@ -2,7 +2,7 @@
 
 <img src="public/favicon.ico" alt="ExamForge Logo" height="250">
 
-**ExamForge** is an AI-powered platform designed to help students prepare for exams. It transforms study materials (PDFs and DOCX files) into interactive learning experiences using AI to process uploaded documents, extract relevant content, and generate practice questions. Users can take quizzes, organize study materials by subject, and track their progress through analytics.
+**ExamForge** is an AI-powered platform designed to help students prepare for exams. It transforms study materials (PDFs and DOCX files) into interactive learning experiences using AI to process uploaded documents, extract relevant content, and generate practice questions. Users can take quizzes, organize study materials by subject, and track their progress through analytics..
 
 ## 🚀 Getting Started
 
